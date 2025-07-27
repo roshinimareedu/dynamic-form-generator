@@ -5,168 +5,175 @@ const DynamicForm = ({ apiUrl }) => {
   const [fields, setFields] = useState([]);
   const [formData, setFormData] = useState({});
 
+  // Fetch form fields when API URL changes
   useEffect(() => {
-    async function fetchFormFields() {
+    const fetchFields = async () => {
       try {
-        const res = await axios.get(apiUrl);
-        const rawFields = res.data?.data?.fields?.flat() || [];
-
-        // Set default values for formData
-        const initialData = {};
-        rawFields.forEach((field) => {
-          initialData[field.fieldId] = field.fieldType === "checkbox" ? false : "";
-        });
-
-        setFields(rawFields);
-        setFormData(initialData);
+        const response = await axios.get(apiUrl);
+        const fieldGroups = response.data.data.fields;
+        const flatFields = fieldGroups.flat(); // Flatten the 2D array
+        setFields(flatFields);
       } catch (error) {
-        console.error("Failed to fetch form fields:", error);
+        console.error("Error fetching form fields:", error);
       }
-    }
+    };
 
-    fetchFormFields();
+    fetchFields();
   }, [apiUrl]);
 
-  const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field.fieldId]: value }));
+  // Handle input changes
+  const handleChange = (fieldKey, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [fieldKey]: value,
+    }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log("Form submitted:", formData);
-  };
-
+  // Render fields based on type
   const renderField = (field) => {
-    const props = field.properties || {};
-    const id = field.fieldId;
-    const label = props.label || field.fieldName;
-    const placeholder = props.placeholder || "";
-    const required = props.required || false;
+    const { fieldType, fieldUniqueKey, properties } = field;
+    const { placeholder, label, options } = properties;
 
-    switch (field.fieldType) {
-      case "text":
-      case "number":
-      case "date":
-      case "fixed_time":
-        return (
-          <input
-            type={field.fieldType === "fixed_time" ? "time" : field.fieldType}
-            id={id}
-            value={formData[id]}
-            required={required}
-            placeholder={placeholder}
-            onChange={(e) => handleChange(field, e.target.value)}
-          />
-        );
-
+    switch (fieldType) {
       case "radio":
-        return props.options?.map((option, idx) => (
-          <label key={idx}>
-            <input
-              type="radio"
-              name={id}
-              value={option}
-              checked={formData[id] === option}
-              onChange={() => handleChange(field, option)}
-            />
-            {option}
-          </label>
-        ));
-
-      case "checkbox":
         return (
-          <input
-            type="checkbox"
-            id={id}
-            checked={formData[id]}
-            onChange={(e) => handleChange(field, e.target.checked)}
-          />
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            {options.map((opt) => (
+              <label key={opt}>
+                <input
+                  type="radio"
+                  name={fieldUniqueKey}
+                  value={opt}
+                  onChange={() => handleChange(fieldUniqueKey, opt)}
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
         );
 
       case "dropdown":
         return (
-          <select
-            id={id}
-            value={formData[id]}
-            onChange={(e) => handleChange(field, e.target.value)}
-            required={required}
-          >
-            <option value="">Select...</option>
-            {props.options?.map((opt, i) => (
-              <option key={i} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <select
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.value)}
+            >
+              <option value="">-- Select --</option>
+              {options.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        );
+
+      case "date":
+        return (
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <input
+              type="date"
+              placeholder={placeholder}
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.value)}
+            />
+          </div>
+        );
+
+      case "number":
+        return (
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <input
+              type="number"
+              placeholder={placeholder}
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.value)}
+            />
+          </div>
         );
 
       case "multiple":
         return (
-          <select
-            multiple
-            id={id}
-            value={formData[id] || []}
-            onChange={(e) =>
-              handleChange(
-                field,
-                Array.from(e.target.selectedOptions, (opt) => opt.value)
-              )
-            }
-          >
-            {props.options?.map((opt, i) => (
-              <option key={i} value={opt}>
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            {options.map((opt) => (
+              <label key={opt}>
+                <input
+                  type="checkbox"
+                  value={opt}
+                  onChange={(e) => {
+                    const valueArray = formData[fieldUniqueKey] || [];
+                    if (e.target.checked) {
+                      handleChange(fieldUniqueKey, [...valueArray, opt]);
+                    } else {
+                      handleChange(
+                        fieldUniqueKey,
+                        valueArray.filter((v) => v !== opt)
+                      );
+                    }
+                  }}
+                />
                 {opt}
-              </option>
+              </label>
             ))}
-          </select>
+          </div>
+        );
+
+      case "checkbox":
+        return (
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <input
+              type="checkbox"
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.checked)}
+            />
+          </div>
+        );
+
+      case "fixed_time":
+        return (
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <input
+              type="time"
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.value)}
+            />
+          </div>
         );
 
       case "weekdays":
-        const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
         return (
-          <select
-            id={id}
-            value={formData[id]}
-            onChange={(e) => handleChange(field, e.target.value)}
-          >
-            <option value="">Select weekday</option>
-            {weekdays.map((day) => (
-              <option key={day} value={day}>
-                {day}
-              </option>
-            ))}
-          </select>
+          <div key={fieldUniqueKey}>
+            <label>{label}</label>
+            <select
+              onChange={(e) => handleChange(fieldUniqueKey, e.target.value)}
+            >
+              <option value="">-- Select Day --</option>
+              {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
+                <option key={day} value={day}>
+                  {day}
+                </option>
+              ))}
+            </select>
+          </div>
         );
 
       default:
-        return (
-          <input
-            type="text"
-            id={id}
-            value={formData[id]}
-            placeholder={placeholder}
-            required={required}
-            onChange={(e) => handleChange(field, e.target.value)}
-          />
-        );
+        return null;
     }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log("Form Data:", formData);
+    alert("Form submitted! Check console.");
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      {fields.map((field) => {
-        const label =
-          field?.properties?.fieldLabelProperties?.fieldLabel ||
-          field?.properties?.label ||
-          field.fieldName;
-        return (
-          <div key={field.fieldId} style={{ marginBottom: "1rem" }}>
-            {label && <label htmlFor={field.fieldId}>{label}</label>}
-            <br />
-            {renderField(field)}
-          </div>
-        );
-      })}
+      {fields.map((field) => renderField(field))}
       <button type="submit">Submit</button>
     </form>
   );
